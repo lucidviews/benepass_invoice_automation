@@ -1,0 +1,16 @@
+{
+  "name": "invoice-automation",
+  "version": "1.0.0",
+  "description": "Automated invoice download and Benepass reimbursement submission",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "pdf-parse": "^1.1.1",
+    "playwright": "^1.44.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
+}
