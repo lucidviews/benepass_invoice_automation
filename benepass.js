@@ -25,7 +25,7 @@ async function submitBenepassReimbursements(expenses) {
         console.log('[Benepass] Entering email on Benepass SSO page...');
         await page.locator('input[name="email"], input[type="email"]').waitFor({ timeout: 15000 });
         await page.locator('input[name="email"], input[type="email"]').fill(process.env.BENEPASS_EMAIL);
-        await page.locator('button', { hasText: /dbt Labs SSO/i }).click({ timeout: 10000 });
+        await page.locator('button', { hasText: new RegExp(process.env.BENEPASS_SSO_BUTTON_TEXT, 'i') }).click({ timeout: 10000 });
       }
 
       // Step 2: Okta page — click "Sign in with Okta FastPass"

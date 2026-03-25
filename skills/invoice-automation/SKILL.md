@@ -8,9 +8,20 @@ version: 1.0.0
 
 You are helping the user configure automated invoice downloading and Benepass reimbursement submission. Work through this interactively — ask one topic at a time and generate code as you go.
 
-## Step 1 — Understand what they need
+## Step 1 — One-time Benepass setup
 
-Start by asking:
+Before anything else, ask:
+
+1. **Benepass email**: What email address do they use to log into Benepass?
+2. **SSO button text**: When they go to the Benepass login page, what does the SSO button say? (e.g. "Acme Corp SSO", "Sign in with Google") — this is the button that redirects them to their company's identity provider.
+
+Add both to `.env`:
+```
+BENEPASS_EMAIL=they@theircompany.com
+BENEPASS_SSO_BUTTON_TEXT=Acme Corp SSO
+```
+
+Then ask:
 - What invoices do they need to download each month? (list all platforms)
 - For each platform: what is the website URL for the invoices page?
 

@@ -9,6 +9,13 @@ This file is already included in the repo. Do not modify it — it handles the f
 3. If not logged in: fills your email, clicks "Log In with dbt Labs SSO", clicks "Sign in with Okta FastPass", waits for you to touch your fingerprint
 4. For each expense: selects the benefit category, fills amount/merchant/note, uploads the PDF receipt, submits
 
+## Required env vars
+
+```
+BENEPASS_EMAIL=you@yourcompany.com
+BENEPASS_SSO_BUTTON_TEXT=Acme Corp SSO   # text on the SSO button on the Benepass login page
+```
+
 ## First run
 
 On first run you'll need to authenticate. A macOS notification will appear — touch your fingerprint in Okta Verify when prompted. The session is then saved and subsequent runs will skip authentication.
