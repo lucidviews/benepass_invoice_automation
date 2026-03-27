@@ -225,6 +225,44 @@ const page = await context.newPage();
 
 ---
 
+## Strategy C — Manual Cloudflare pause
+
+Use when stealth (Strategy A) is not enough and Cloudflare shows a "Confirm you are human" challenge. The automation opens the browser, detects the challenge, notifies you to solve it manually, waits for Enter, then continues.
+
+Add this detection block immediately after the first `page.goto` call in any Strategy A downloader:
+
+```js
+// After page.goto — detect and handle Cloudflare challenge
+if (await isCloudflareChallenge(page)) {
+  notify('Invoice Automation', 'Cloudflare challenge on MyPlatform — solve it in the browser, then press Enter');
+  console.log('[MyPlatform] Solve the Cloudflare challenge in the browser window, then press Enter to continue...');
+  await keypress();
+}
+
+// Helpers — add once per file, outside the main download function
+async function isCloudflareChallenge(page) {
+  if (page.url().includes('challenges.cloudflare.com')) return true;
+  const count = await page.locator('iframe[src*="challenges.cloudflare.com"]').count();
+  return count > 0;
+}
+
+function keypress() {
+  return new Promise(resolve => process.stdin.once('data', resolve));
+}
+```
+
+**When to escalate to Strategy B:** If the site challenges on every visit even after manual solving, switch to Strategy B (real browser with valid cookies).
+
+**Strategy precedence:**
+
+| Situation | Strategy |
+|---|---|
+| Normal site | A (stealth) |
+| Cloudflare challenge on some visits | A (stealth) + C wrapper |
+| Persistent blocking / fingerprint detection | B (real browser) |
+
+---
+
 ## PDF Amount Parsing
 
 `pdfParser.js` handles the extraction. It tries labeled patterns first, then falls back to the largest currency amount on the page.
