@@ -148,7 +148,6 @@ async function main() {
   logger.notifyRunComplete(active);
 }
 
-
 function validateEnv() {
   const required = ['BENEPASS_EMAIL'];
   const missing = required.filter(k => !process.env[k]);
