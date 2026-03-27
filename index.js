@@ -4,6 +4,8 @@ const fs = require('fs');
 
 const { submitBenepassReimbursements } = require('./benepass');
 const { extractAmountFromPDF } = require('./pdfParser');
+const logger = require('./logger');
+const { formatAmount } = logger;
 
 const INVOICES_DIR = path.join(process.env.HOME, 'Documents', 'invoices');
 
@@ -54,12 +56,13 @@ async function main() {
   const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const monthDir = path.join(INVOICES_DIR, monthStr);
   fs.mkdirSync(monthDir, { recursive: true });
+  logger.initLog(monthDir);
 
   const active = PLATFORMS.filter(p => only.includes(p.id));
 
   // ── Step 1: Download invoices ───────────────────────────────────────────────
-  console.log(`\n=== Invoice Automation — ${monthStr} ===\n`);
-  console.log('Step 1: Downloading invoices...\n');
+  logger.log(`\n=== Invoice Automation — ${monthStr} ===\n`);
+  logger.log('Step 1: Downloading invoices...\n');
 
   for (const platform of active) {
     platform.invoicePath = path.join(monthDir, platform.filename);
@@ -67,15 +70,15 @@ async function main() {
   }
 
   // ── Step 2: Extract amounts ─────────────────────────────────────────────────
-  console.log('\nStep 2: Extracting amounts from invoices...\n');
+  logger.log('\nStep 2: Extracting amounts from invoices...\n');
 
   for (const platform of active) {
     platform.amount = await extractAmountFromPDF(platform.invoicePath);
-    console.log(`  ${platform.label}: ${formatAmount(platform.amount, platform.currency)}`);
+    logger.log(`  ${platform.label}: ${formatAmount(platform.amount, platform.currency)}`);
   }
 
   // ── Step 3: Apply caps ──────────────────────────────────────────────────────
-  console.log('\nStep 3: Applying stipend caps...\n');
+  logger.log('\nStep 3: Applying stipend caps...\n');
 
   // Group platforms that share a combined cap
   const capGroups = {};
@@ -98,11 +101,11 @@ async function main() {
       const sum = group.reduce((s, p) => s + p.reimbursement, 0);
       if (sum > cap) group[group.length - 1].reimbursement = Math.round((cap - group.slice(0, -1).reduce((s, p) => s + p.reimbursement, 0)) * 100) / 100;
       const labels = group.map(p => `${p.label} ${formatAmount(p.reimbursement, p.currency)}`).join(', ');
-      console.log(`  ${group[0].category} combined (${formatAmount(total, group[0].currency)}) exceeds cap (${formatAmount(cap, group[0].currency)}).`);
-      console.log(`  Splitting proportionally → ${labels}`);
+      logger.log(`  ${group[0].category} combined (${formatAmount(total, group[0].currency)}) exceeds cap (${formatAmount(cap, group[0].currency)}).`);
+      logger.log(`  Splitting proportionally → ${labels}`);
     } else {
       for (const platform of group) platform.reimbursement = platform.amount;
-      console.log(`  ${group[0].category} combined: ${formatAmount(total, group[0].currency)} — within cap ✓`);
+      logger.log(`  ${group[0].category} combined: ${formatAmount(total, group[0].currency)} — within cap ✓`);
     }
   }
 
@@ -111,9 +114,9 @@ async function main() {
       const capped = platform.cap ? Math.min(platform.amount, platform.cap) : platform.amount;
       platform.reimbursement = capped;
       if (platform.cap && platform.amount > platform.cap) {
-        console.log(`  ${platform.label} (${formatAmount(platform.amount, platform.currency)}) exceeds cap — capping at ${formatAmount(capped, platform.currency)}`);
+        logger.log(`  ${platform.label} (${formatAmount(platform.amount, platform.currency)}) exceeds cap — capping at ${formatAmount(capped, platform.currency)}`);
       } else if (platform.cap) {
-        console.log(`  ${platform.label}: ${formatAmount(platform.amount, platform.currency)} — within cap ✓`);
+        logger.log(`  ${platform.label}: ${formatAmount(platform.amount, platform.currency)} — within cap ✓`);
       }
     }
   }
@@ -128,25 +131,21 @@ async function main() {
   }));
 
   if (dryRun) {
-    console.log('\nStep 4: Dry run — skipping Benepass submission.\n');
-    console.log('  Would submit:');
+    logger.log('\nStep 4: Dry run — skipping Benepass submission.\n');
+    logger.log('  Would submit:');
     for (const e of expenses) {
-      console.log(`    ${e.merchant} — ${formatAmount(e.amount, active.find(p => p.merchant === e.merchant)?.currency)} (${e.category})`);
+      logger.log(`    ${e.merchant} — ${formatAmount(e.amount, active.find(p => p.merchant === e.merchant)?.currency)} (${e.category})`);
     }
-    console.log('\n=== Dry run complete. Run without --dry-run to submit. ===\n');
+    logger.log('\n=== Dry run complete. Run without --dry-run to submit. ===\n');
+    logger.notifyRunComplete(active, true);
     return;
   }
 
-  console.log('\nStep 4: Submitting reimbursements to Benepass...');
-  console.log('  (A notification will appear when fingerprint authentication is required)\n');
+  logger.log('\nStep 4: Submitting reimbursements to Benepass...');
+  logger.log('  (A notification will appear when fingerprint authentication is required)\n');
   await submitBenepassReimbursements(expenses);
-  console.log('\n=== All done! Reimbursements submitted successfully. ===\n');
-}
-
-function formatAmount(amount, currency = 'EUR') {
-  const symbols = { EUR: '€', USD: '$', GBP: '£' };
-  const symbol = symbols[currency] || currency + ' ';
-  return `${symbol}${amount.toFixed(2)}`;
+  logger.log('\n=== All done! Reimbursements submitted successfully. ===\n');
+  logger.notifyRunComplete(active);
 }
 
 function validateEnv() {
@@ -160,6 +159,6 @@ function validateEnv() {
 }
 
 main().catch(err => {
-  console.error('\nAutomation failed:', err.message);
+  logger.notifyError(err.message);
   process.exit(1);
 });

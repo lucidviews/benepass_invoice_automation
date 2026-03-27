@@ -4,13 +4,16 @@ Reference for `SKILL.md`. Use this to generate the right downloader for a given 
 
 ---
 
-## Strategy A — Playwright (default)
+## Strategy A — Playwright with stealth (default)
 
-Works for most sites. Use this first unless the site actively blocks headless browsers.
+Works for most sites. The stealth plugin masks headless browser signals, preventing Cloudflare and similar systems from triggering a challenge before the login page even loads. Use this first.
 
 ```js
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
+
+chromium.use(StealthPlugin());
 
 async function downloadMyPlatformInvoice(savePath) {
   const browser = await chromium.launch({ headless: false });
@@ -34,6 +37,10 @@ async function downloadMyPlatformInvoice(savePath) {
     const download = await downloadPromise;
     await download.saveAs(savePath);
     console.log(`[MyPlatform] Invoice saved to ${savePath}`);
+  } catch (err) {
+    const screenshotPath = '/tmp/myplatform-error.png';
+    await page.screenshot({ path: screenshotPath }).catch(() => {});
+    throw new Error(`[MyPlatform] ${err.message} — screenshot saved to ${screenshotPath}`);
   } finally {
     await browser.close();
   }
@@ -90,6 +97,16 @@ await page.locator('button:has-text("Download")').first().click();
 const pdfBuffer = await pdfPromise;
 fs.writeFileSync(savePath, pdfBuffer);
 ```
+
+### Debugging with Playwright MCP
+
+When a selector fails, Claude can inspect the live page:
+
+1. The error message includes a screenshot path (e.g. `/tmp/myplatform-error.png`) — open it to see what the page looked like when it crashed.
+2. Use `browser_navigate` to open the platform URL, `browser_snapshot` to get the DOM structure, and `browser_take_screenshot` to see the current state.
+3. Identify the correct selector from the snapshot and update the downloader.
+
+The SKILL.md Step 5 debugging flow uses these tools automatically.
 
 ---
 
@@ -205,6 +222,44 @@ const browser = await chromium.connectOverCDP('http://localhost:9222');
 const context = browser.contexts()[0];
 const page = await context.newPage();
 ```
+
+---
+
+## Strategy C — Manual Cloudflare pause
+
+Use when stealth (Strategy A) is not enough and Cloudflare shows a "Confirm you are human" challenge. The automation opens the browser, detects the challenge, notifies you to solve it manually, waits for Enter, then continues.
+
+Add this detection block immediately after the first `page.goto` call in any Strategy A downloader:
+
+```js
+// After page.goto — detect and handle Cloudflare challenge
+if (await isCloudflareChallenge(page)) {
+  notify('Invoice Automation', 'Cloudflare challenge on MyPlatform — solve it in the browser, then press Enter');
+  console.log('[MyPlatform] Solve the Cloudflare challenge in the browser window, then press Enter to continue...');
+  await keypress();
+}
+
+// Helpers — add once per file, outside the main download function
+async function isCloudflareChallenge(page) {
+  if (page.url().includes('challenges.cloudflare.com')) return true;
+  const count = await page.locator('iframe[src*="challenges.cloudflare.com"]').count();
+  return count > 0;
+}
+
+function keypress() {
+  return new Promise(resolve => process.stdin.once('data', resolve));
+}
+```
+
+**When to escalate to Strategy B:** If the site challenges on every visit even after manual solving, switch to Strategy B (real browser with valid cookies).
+
+**Strategy precedence:**
+
+| Situation | Strategy |
+|---|---|
+| Normal site | A (stealth) |
+| Cloudflare challenge on some visits | A (stealth) + C wrapper |
+| Persistent blocking / fingerprint detection | B (real browser) |
 
 ---
 

@@ -34,7 +34,10 @@ Ask these questions (skip any that are obvious from context):
 1. **Login**: Does the site require a username/password? What are the field selectors, or should you inspect the page together?
 2. **Invoice location**: Where on the site does the invoice appear — a list page, a download button, a PDF link? Is there a specific row or description to filter by (e.g. only membership invoices, not penalty fees)?
 3. **Download mechanism**: Does clicking the button trigger a file download, open a PDF in a new tab, or call an API? (See `references/downloader-patterns.md` for how to identify and handle each case.)
-4. **Cloudflare / bot protection**: Does the site block automated browsers? If so, see the real-browser strategies in `references/downloader-patterns.md`.
+4. **Cloudflare / bot protection**: Does the site show a "Confirm you are human" Cloudflare challenge when you visit it?
+   - **No challenge**: Strategy A (stealth) handles this automatically.
+   - **Occasional challenge**: use Strategy A + the Strategy C wrapper from `references/downloader-patterns.md`.
+   - **Blocks completely even after manual solve**: use Strategy B (real browser).
 5. **Amount format**: Is the invoice in EUR, USD, GBP, or another currency? German number format (`1.234,56`) or English (`1,234.56`)?
 6. **Stipend category**: Which Benepass category does this fall under? (e.g. `Cell & Internet Stipend`, `Health & Wellness Stipend`, `Professional Development Stipend`) Check the user's Benepass account if unsure.
 7. **Cap**: Is there a reimbursement cap for this category? If multiple platforms share one combined cap, note which ones.
@@ -67,10 +70,17 @@ Run a dry run first:
 node index.js --dry-run --only=<platform>
 ```
 
-If it fails, check:
-- Is the selector still correct? Run with `headless: false` and add `await page.pause()` to inspect
-- Is the PDF amount being parsed correctly? Check `pdfParser.js` — you may need to add a labeled pattern for this platform's invoice format
-- Is the Benepass category name an exact match to what the dropdown shows?
+If it fails, check the error message for a screenshot path (e.g. `/tmp/myplatform-error.png`) and open it to see what the page looked like when it crashed.
+
+**Selector issues** — use the Playwright MCP to inspect the live page:
+1. Use `browser_navigate` to open the platform's login or invoices URL
+2. Use `browser_snapshot` to get the current DOM structure
+3. Identify the correct selector from the snapshot
+4. Update the downloader and re-run the dry run
+
+**PDF parsing issues** — check `pdfParser.js`. You may need to add a labeled pattern for this platform's invoice format (see `references/downloader-patterns.md` → PDF Amount Parsing).
+
+**Benepass category mismatch** — the category string must exactly match what the Benepass dropdown shows. Open the Benepass create expense page and verify the exact text.
 
 Once the dry run shows the right amounts, run for real:
 ```bash
