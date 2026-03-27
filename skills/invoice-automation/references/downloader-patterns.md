@@ -4,13 +4,16 @@ Reference for `SKILL.md`. Use this to generate the right downloader for a given 
 
 ---
 
-## Strategy A — Playwright (default)
+## Strategy A — Playwright with stealth (default)
 
-Works for most sites. Use this first unless the site actively blocks headless browsers.
+Works for most sites. The stealth plugin masks headless browser signals, preventing Cloudflare and similar systems from triggering a challenge before the login page even loads. Use this first.
 
 ```js
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
+
+chromium.use(StealthPlugin());
 
 async function downloadMyPlatformInvoice(savePath) {
   const browser = await chromium.launch({ headless: false });
@@ -34,6 +37,10 @@ async function downloadMyPlatformInvoice(savePath) {
     const download = await downloadPromise;
     await download.saveAs(savePath);
     console.log(`[MyPlatform] Invoice saved to ${savePath}`);
+  } catch (err) {
+    const screenshotPath = '/tmp/myplatform-error.png';
+    await page.screenshot({ path: screenshotPath }).catch(() => {});
+    throw new Error(`[MyPlatform] ${err.message} — screenshot saved to ${screenshotPath}`);
   } finally {
     await browser.close();
   }
@@ -90,6 +97,16 @@ await page.locator('button:has-text("Download")').first().click();
 const pdfBuffer = await pdfPromise;
 fs.writeFileSync(savePath, pdfBuffer);
 ```
+
+### Debugging with Playwright MCP
+
+When a selector fails, Claude can inspect the live page:
+
+1. The error message includes a screenshot path (e.g. `/tmp/myplatform-error.png`) — open it to see what the page looked like when it crashed.
+2. Use `browser_navigate` to open the platform URL, `browser_snapshot` to get the DOM structure, and `browser_take_screenshot` to see the current state.
+3. Identify the correct selector from the snapshot and update the downloader.
+
+The SKILL.md Step 5 debugging flow uses these tools automatically.
 
 ---
 
